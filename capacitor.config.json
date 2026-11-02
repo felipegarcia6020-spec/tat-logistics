@@ -1,0 +1,6 @@
+{
+  "appId": "com.routelogix.tat",
+  "appName": "RouteLogix TaT",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

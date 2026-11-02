@@ -1,0 +1,17 @@
+# Dependencias de Node.js
+node_modules/
+
+# Archivos de compilación y caché de Android Studio y Gradle
+android/.gradle/
+android/app/build/
+android/build/
+*.iml
+
+# Entornos virtuales, logs y archivos temporales del sistema operativo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
