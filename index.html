@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>RouteLogix TaT - Mobile Ready</title>
+
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" type="image/png" href="icon.png">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MapLibre GL CSS & JS -->
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+
+    <script>
+                tailwind.config = {
+                  theme: {
+                    extend: {
+                      fontFamily: { sans: ['Inter', 'sans-serif'] },
+                      colors: { brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' } }
+                    }
+                  }
+                }
+    </script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #020617;
+            font-family: 'Inter', sans-serif;
+            position: fixed;
+            inset: 0;
+        }
+
+        #map-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #map {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            inset: 0 !important;
+        }
+
+        .maplibregl-popup-content {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+            border-radius: 0.75rem !important;
+            border: 1px solid #334155 !important;
+            padding: 12px !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6) !important;
+        }
+
+        .floating-drawer {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            transform: translateY(115%);
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .drawer-open {
+            transform: translateY(0%) !important;
+            pointer-events: auto !important;
+            opacity: 1 !important;
+        }
+
+        .custom-stop-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: white;
+            font-weight: 800;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+            border: 2px solid #ffffff;
+            cursor: pointer;
+        }
+
+        .map-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 48px;
+            height: 48px;
+            pointer-events: none;
+            z-index: 400;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s ease;
+        }
+
+        .crosshair-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .crosshair-ring {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px dashed rgba(99, 102, 241, 0.8);
+            border-radius: 50%;
+            animation: spin-slow 10s linear infinite;
+        }
+
+        .crosshair-center {
+            width: 8px;
+            height: 8px;
+            background-color: #f43f5e;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #f43f5e;
+        }
+
+        @keyframes spin-slow {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden">
+
+    <!-- CONTENEDOR DEL MAPA -->
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <!-- MIRA / CROSSHAIR CENTRAL -->
+    <div id="map-crosshair-container" class="map-crosshair crosshair-hidden">
+        <div class="crosshair-ring"></div>
+        <div class="crosshair-center"></div>
+    </div>
+
+    <!-- BARRA SUPERIOR DE BÚSQUEDA Y ACCESOS -->
+    <div class="absolute top-3 left-3 right-3 z-20 flex items-center gap-2 pointer-events-auto">
+        <div class="flex-1 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl flex items-center px-3 py-2 shadow-2xl">
+            <i class="fa-solid fa-magnifying-glass text-slate-400 mr-2 text-xs"></i>
+            <input type="text" id="map-search-input" placeholder="Buscar dirección o cliente..." onkeydown="handleSearchKeyDown(event)" class="w-full bg-transparent text-xs text-white focus:outline-none placeholder-slate-400">
+            <button onclick="searchLocation()" class="text-brand-400 px-2 text-xs font-bold">Ir</button>
+        </div>
+        <button onclick="centerOnUserGPS()" class="w-10 h-10 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl flex items-center justify-center text-white shadow-2xl shrink-0">
+            <i class="fa-solid fa-location-crosshairs text-brand-400"></i>
+        </button>
+        <button onclick="openFinanceModal()" class="w-10 h-10 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl flex items-center justify-center text-amber-400 shadow-2xl shrink-0">
+            <i class="fa-solid fa-wallet"></i>
+        </button>
+    </div>
+
+    <!-- BOTÓN FLOTANTE CENTRAL PARA AÑADIR PARADA -->
+    <div class="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+        <button onclick="openNewRouteModalAtCenter()" class="bg-brand-600 hover:bg-brand-500 text-white font-bold px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 border border-brand-500/50 text-xs active:scale-95 transition-transform">
+            <i class="fa-solid fa-plus text-sm"></i> Añadir Parada aquí
+        </button>
+    </div>
+
+    <!-- BARRA DE NAVEGACIÓN INFERIOR (DRAWER TABS) -->
+    <div class="absolute bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800 px-4 py-2 flex justify-around items-center">
+        <button onclick="openDrawer('stops')" class="flex flex-col items-center text-slate-400 hover:text-brand-400 text-[10px]">
+            <i class="fa-solid fa-list-check text-base mb-0.5"></i> Paradas
+        </button>
+        <button onclick="openDrawer('routes')" class="flex flex-col items-center text-slate-400 hover:text-brand-400 text-[10px]">
+            <i class="fa-solid fa-route text-base mb-0.5"></i> Rutas
+        </button>
+        <button onclick="openDrawer('settings')" class="flex flex-col items-center text-slate-400 hover:text-brand-400 text-[10px]">
+            <i class="fa-solid fa-gear text-base mb-0.5"></i> Ajustes
+        </button>
+    </div>
+
+    <!-- PANEL INFERIOR DESLIZANTE (BOTTOM DRAWER) -->
+    <div id="bottom-drawer" class="floating-drawer absolute bottom-12 left-0 right-0 z-20 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 rounded-t-3xl max-h-[65vh] flex flex-col shadow-2xl">
+        <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+            <h3 id="drawer-title" class="font-bold text-xs text-white">Gestión de Ruta</h3>
+            <button onclick="closeDrawerCompletely()" class="text-slate-400 hover:text-white px-2 py-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <!-- Filtros de Estado -->
+        <div id="drawer-filters" class="flex gap-1 p-2 bg-slate-950 border-b border-slate-800 text-[10px]">
+            <button onclick="filterStops('all')" class="flex-1 bg-slate-800 text-white py-1 rounded font-semibold">Todas</button>
+            <button onclick="filterStops('pending')" class="flex-1 bg-amber-500/20 text-amber-300 py-1 rounded font-semibold">Pendientes</button>
+            <button onclick="filterStops('delivered')" class="flex-1 bg-emerald-500/20 text-emerald-300 py-1 rounded font-semibold">Cobrados</button>
+        </div>
+        <div id="drawer-content-body" class="p-3 overflow-y-auto space-y-2 flex-1"></div>
+    </div>
+
+    <!-- MODAL DE LOGIN / AUTENTICACIÓN -->
+    <div id="modal-login" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-4">
+            <div class="text-center">
+                <h2 class="text-lg font-extrabold text-white">RouteLogix TaT</h2>
+                <p id="trial-badge" class="text-xs text-brand-400 mt-1 font-bold">Licencia Free</p>
+            </div>
+            <form onsubmit="handleLoginSubmit(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1">Correo electrónico</label>
+                    <input type="email" id="login-email" required placeholder="admin@routelogix.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Contraseña</label>
+                    <input type="password" id="login-pass" required placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white">
+                </div>
+                <button type="submit" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-2.5 rounded-xl shadow-lg mt-2">Iniciar Sesión</button>
+            </form>
+            <button onclick="openRegisterModal()" class="w-full text-center text-xs text-slate-400 hover:text-brand-400 pt-2">¿No tienes cuenta? Regístrate aquí</button>
+        </div>
+    </div>
+
+    <!-- MODAL DE REGISTRO -->
+    <div id="modal-register" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl space-y-4">
+            <h2 class="text-lg font-extrabold text-white text-center">Registro de Conductor</h2>
+            <form onsubmit="handleRegisterSubmit(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1">Nombre Completo</label>
+                    <input type="text" id="reg-username" required class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Correo electrónico</label>
+                    <input type="email" id="reg-email" required class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Teléfono / Celular</label>
+                    <input type="text" id="reg-phone" required class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Contraseña</label>
+                    <input type="password" id="reg-pass" required class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl shadow-lg mt-2">Crear Cuenta</button>
+            </form>
+            <button onclick="backToLogin()" class="w-full text-center text-xs text-slate-400 hover:text-brand-400 pt-2">Volver al inicio de sesión</button>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVA PARADA -->
+    <div id="modal-new-stop" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl w-full max-w-sm shadow-2xl space-y-3">
+            <h3 class="font-bold text-sm text-white"><i class="fa-solid fa-map-pin text-brand-400 mr-1"></i> Nueva Parada en Ruta</h3>
+            <form onsubmit="handleCreateStop(event)" class="space-y-2 text-xs">
+                <input type="text" id="stop-client-name" placeholder="Nombre del Negocio / Cliente" required class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                <input type="text" id="stop-client-phone" placeholder="Teléfono de contacto" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                <input type="text" id="stop-invoice-num" placeholder="Número de Factura (Ej. FAC-102)" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                <input type="number" id="stop-invoice-val" placeholder="Valor Factura ($)" required class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                <input type="text" id="stop-address" placeholder="Dirección descriptiva" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-new-stop')" class="flex-1 bg-slate-800 text-slate-300 py-2 rounded font-bold">Cancelar</button>
+                    <button type="submit" class="flex-1 bg-brand-600 text-white py-2 rounded font-bold">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL FINANZAS Y GASTOS -->
+    <div id="modal-finance" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl w-full max-w-sm shadow-2xl space-y-3 max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <h3 class="font-bold text-sm text-amber-400"><i class="fa-solid fa-wallet mr-1"></i> Balance Financiero</h3>
+                <button onclick="closeModal('modal-finance')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="finance-modal-body" class="overflow-y-auto space-y-3 flex-1 text-xs"></div>
+        </div>
+    </div>
+
+    <!-- MODAL DE COBRO -->
+    <div id="modal-payment" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl w-full max-w-sm shadow-2xl space-y-3">
+            <h3 class="font-bold text-sm text-emerald-400"><i class="fa-solid fa-cash-register mr-1"></i> Registrar Cobro / Entrega</h3>
+            <form onsubmit="handleConfirmPayment(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1">Método de Pago</label>
+                    <select id="payment-method" onchange="togglePaymentProofField()" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                        <option value="cash">Efectivo</option>
+                        <option value="nequi">Nequi</option>
+                        <option value="breve">Breve</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Monto Recaudado ($)</label>
+                    <input type="number" id="payment-amount" required class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-bold text-emerald-400">
+                </div>
+                <div id="container-proof-photo" class="hidden">
+                    <label class="block text-slate-400 mb-1">Comprobante Digital (Opcional)</label>
+                    <input type="text" placeholder="Ref. transferencia o comprobante" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-payment')" class="flex-1 bg-slate-800 text-slate-300 py-2 rounded font-bold">Cancelar</button>
+                    <button type="submit" class="flex-1 bg-emerald-600 text-white py-2 rounded font-bold">Confirmar Cobro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Archivo lógico de la app -->
+    <script src="app.js"></script>
+</body>
+</html>
